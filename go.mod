@@ -1,4 +1,4 @@
-module github.com/krixlion/dev-forum_rabbitmq
+module github.com/krixlion/dev_forum-rabbitmq
 
 go 1.19
 

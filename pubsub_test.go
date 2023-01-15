@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	rabbitmq "github.com/krixlion/dev-forum_rabbitmq"
+	rabbitmq "github.com/krixlion/dev_forum-rabbitmq"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
 
