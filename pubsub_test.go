@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/joho/godotenv"
 	rabbitmq "github.com/krixlion/dev_forum-rabbitmq"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.opentelemetry.io/otel"
-
-	"github.com/google/go-cmp/cmp"
+	"go.uber.org/goleak"
 )
 
 const consumer = "TESTING"
@@ -27,6 +27,10 @@ var (
 
 func init() {
 	var ok bool
+	err := godotenv.Load()
+	if err != nil {
+		panic(err)
+	}
 
 	port, ok = os.LookupEnv("MQ_PORT")
 	if !ok || port == "" {
@@ -35,7 +39,7 @@ func init() {
 
 	host, ok = os.LookupEnv("MQ_HOST")
 	if !ok || host == "" {
-		host = "rabbitmq-service"
+		host = "localhost"
 	}
 
 	user, ok = os.LookupEnv("MQ_USER")
@@ -58,8 +62,7 @@ func setUpMQ() *rabbitmq.RabbitMQ {
 		ClosedTimeout:     time.Second * 15,
 		MaxWorkers:        10,
 	}
-	tracer := otel.Tracer("rabbitmq-test")
-	mq := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config, nil, tracer)
+	mq := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config, nil, nil)
 	return mq
 }
 
@@ -72,13 +75,16 @@ func randomString(length int) string {
 	return string(v)
 }
 
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+
+	os.Exit(m.Run())
+}
+
 func TestPubSub(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping Pub/Sub integration test")
 	}
-
-	mq := setUpMQ()
-	defer mq.Close()
 
 	testData := randomString(5)
 	data, err := json.Marshal(testData)
@@ -106,24 +112,31 @@ func TestPubSub(t *testing.T) {
 			wantErr: false,
 		},
 	}
+
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
+			mq := setUpMQ()
+			defer mq.Close()
+
 			err := mq.Publish(ctx, tC.msg)
 			if (err != nil) != tC.wantErr {
 				t.Errorf("RabbitMQ.Publish() error = %+v\n, wantErr = %+v\n", err, tC.wantErr)
+				return
 			}
 
 			msgs, err := mq.Consume(ctx, "deleteArticle", tC.msg.Route)
 			if (err != nil) != tC.wantErr {
 				t.Errorf("RabbitMQ.Consume() error = %+v\n, wantErr = %+v\n", err, tC.wantErr)
+				return
 			}
 
 			msg := <-msgs
 			if !cmp.Equal(tC.msg, msg) {
-				t.Errorf("Messages are not equal:\n want = %+v\n got = %+v\n", tC.msg, msg)
+				t.Errorf("Messages are not equal:\n want = %+v\n got = %+v\n diff = %+v\n", tC.msg, msg, cmp.Diff(tC.msg, msg))
+				return
 			}
 		})
 	}
@@ -133,9 +146,6 @@ func TestPubSubPipeline(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping Pub/Sub Pipeline integration test")
 	}
-
-	mq := setUpMQ()
-	defer mq.Close()
 
 	testData := randomString(5)
 	data, err := json.Marshal(testData)
@@ -169,19 +179,25 @@ func TestPubSubPipeline(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
+			mq := setUpMQ()
+			defer mq.Close()
+
 			err := mq.Enqueue(tC.msg)
 			if (err != nil) != tC.wantErr {
 				t.Errorf("RabbitMQ.Enqueue() error = %+v\n wantErr = %+v\n", err, tC.wantErr)
+				return
 			}
 
 			messages, err := mq.Consume(ctx, "createArticle", tC.msg.Route)
 			if (err != nil) != tC.wantErr {
 				t.Errorf("RabbitMQ.Consume() error = %+v\n wantErr = %+v\n", err, tC.wantErr)
+				return
 			}
 
 			msg := <-messages
 			if !cmp.Equal(tC.msg, msg) {
-				t.Errorf("Messages are not equal:\n want = %+v\n  got = %+v\n", tC.msg, msg)
+				t.Errorf("Messages are not equal:\n want = %+v\n  got = %+v\n diff = %+v\n", tC.msg, msg, cmp.Diff(tC.msg, msg))
+				return
 			}
 		})
 	}

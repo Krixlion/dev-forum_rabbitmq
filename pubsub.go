@@ -198,27 +198,27 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 	callSucceded(true)
 
 	go func() {
-		limiter := make(chan struct{}, mq.config.MaxWorkers)
-
 		for {
 			select {
 			case delivery := <-deliveries:
-				limiter <- struct{}{}
-				go func() {
-					_, span := mq.tracer.Start(ctx, "rabbitmq.Consume")
-					defer span.End()
-					defer func() { <-limiter }()
+				delivery.Ack(false)
+				_, span := mq.tracer.Start(ctx, "rabbitmq.Consume")
+				defer span.End()
 
-					message := Message{
-						Route:       route,
-						Body:        delivery.Body,
-						ContentType: ContentType(delivery.ContentType),
-						Timestamp:   delivery.Timestamp,
-					}
+				message := Message{
+					Route:       route,
+					Body:        delivery.Body,
+					ContentType: ContentType(delivery.ContentType),
+					Timestamp:   delivery.Timestamp,
+				}
 
-					delivery.Ack(false)
-					messages <- message
-				}()
+				// Non-blocking send to unbuffered channel
+				select {
+				case messages <- message:
+				default:
+					continue
+				}
+
 			case <-ctx.Done():
 				close(messages)
 				return

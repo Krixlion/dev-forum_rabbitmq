@@ -1,0 +1,42 @@
+version: '3'
+
+volumes:
+  rabbitmq-data:
+  rabbitmq-logs:  
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3.11.3-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      # AMQP port
+      - ${MQ_PORT}:5672
+      # HTTP port
+      - 15672:15672
+    volumes:
+      - ./enabled_plugins:/etc/rabbitmq/enabled_plugins
+      - rabbitmq-data:/var/lib/rabbitmq
+      - rabbitmq-logs:/var/log/rabbitmq
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 350M
+        reservations:
+          cpus: '0.25'
+          memory: 20M
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1 ",
+          "--spider",
+          "http://localhost:15672"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
