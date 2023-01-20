@@ -6,3 +6,5 @@ until [ "$(docker inspect -f {{.State.Health.Status}} rabbitmq)" == "healthy" ];
     printf "\n"
     sleep 10;
 done;
+
+echo "RabbitMQ is up!"

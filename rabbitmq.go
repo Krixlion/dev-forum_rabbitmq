@@ -106,6 +106,7 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, logger 
 // seperate goroutines while blocking the goroutine it was called from.
 // You should use Close() in order to shutdown the connection.
 func (mq *RabbitMQ) run() {
+	mq.logger.Log(mq.ctx, "Connecting to RabbitMQ")
 	mq.ReDial(mq.ctx)
 	go mq.runPublishQueue(mq.ctx)
 	go mq.handleConnectionErrors(mq.ctx)
@@ -144,7 +145,6 @@ func (mq *RabbitMQ) handleChannelReads(ctx context.Context) {
 				succedeed, err := mq.breaker.Allow()
 				if err != nil {
 					req <- nil
-
 					setSpanErr(span, err)
 					return
 				}
@@ -152,11 +152,8 @@ func (mq *RabbitMQ) handleChannelReads(ctx context.Context) {
 				channel, err := mq.connection.Channel()
 				if err != nil {
 					req <- nil
-
 					mq.logger.Log(ctx, "Failed to open a new channel", "err", err)
-
 					succedeed(false)
-
 					setSpanErr(span, err)
 					return
 				}
@@ -187,7 +184,6 @@ func (mq *RabbitMQ) handleConnectionErrors(ctx context.Context) {
 }
 
 func (mq *RabbitMQ) ReDial(ctx context.Context) {
-	mq.logger.Log(ctx, "Connecting to RabbitMQ")
 	for {
 		if err := ctx.Err(); err != nil {
 			return
@@ -199,15 +195,12 @@ func (mq *RabbitMQ) ReDial(ctx context.Context) {
 		}
 
 		mq.logger.Log(ctx, "Failed to connect to RabbitMQ", "err", err)
-
 		time.Sleep(mq.config.ReconnectInterval)
-
 		mq.logger.Log(ctx, "Reconnecting to RabbitMQ")
 	}
 }
 
 // dial renews current TCP connection.
-
 func (mq *RabbitMQ) dial() error {
 	callSucceded, err := mq.breaker.Allow()
 	if err != nil {
@@ -216,12 +209,8 @@ func (mq *RabbitMQ) dial() error {
 
 	conn, err := amqp.Dial(mq.url)
 	if err != nil {
-		if isConnectionError(err) {
-			callSucceded(false)
-			return err
-		}
-		// Error did not render broker unavailable.
-		callSucceded(true)
+		// If not conn error then broker is available.
+		callSucceded(!isConnectionError(err))
 		return err
 	}
 	callSucceded(true)
