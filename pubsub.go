@@ -7,7 +7,7 @@ import (
 )
 
 func (mq *RabbitMQ) Publish(ctx context.Context, msg Message) error {
-	ctx, span := mq.tracer.Start(ctx, "rabbitmq.Publish")
+	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.Publish")
 	defer span.End()
 
 	err := mq.prepareExchange(ctx, msg)
@@ -27,17 +27,18 @@ func (mq *RabbitMQ) Publish(ctx context.Context, msg Message) error {
 
 // prepareExchange validates a message and declares a RabbitMQ exchange derived from the message.
 func (mq *RabbitMQ) prepareExchange(ctx context.Context, msg Message) error {
-	ctx, span := mq.tracer.Start(ctx, "rabbitmq.prepareExchange")
+	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.prepareExchange")
 	defer span.End()
 
 	ch := mq.askForChannel()
 	defer ch.Close()
 
 	if err := ctx.Err(); err != nil {
+		setSpanErr(span, err)
 		return err
 	}
 
-	succeded, err := mq.breaker.Allow()
+	callSucceded, err := mq.breaker.Allow()
 	if err != nil {
 		setSpanErr(span, err)
 		return err
@@ -53,32 +54,28 @@ func (mq *RabbitMQ) prepareExchange(ctx context.Context, msg Message) error {
 		nil,              // arguments
 	)
 	if err != nil {
+		callSucceded(!isConnectionError(err))
 		setSpanErr(span, err)
-
-		if isConnectionError(err.(*amqp.Error)) {
-			succeded(false)
-		}
-
-		succeded(true)
 		return err
 	}
-	succeded(true)
+	callSucceded(true)
 
 	return nil
 }
 
 func (mq *RabbitMQ) publish(ctx context.Context, msg Message) error {
-	ctx, span := mq.tracer.Start(ctx, "rabbitmq.publish")
+	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.publish")
 	defer span.End()
 
 	ch := mq.askForChannel()
 	defer ch.Close()
 
 	if err := ctx.Err(); err != nil {
+		setSpanErr(span, err)
 		return err
 	}
 
-	succeded, err := mq.breaker.Allow()
+	callSucceded, err := mq.breaker.Allow()
 	if err != nil {
 		setSpanErr(span, err)
 		return err
@@ -96,16 +93,11 @@ func (mq *RabbitMQ) publish(ctx context.Context, msg Message) error {
 		},
 	)
 	if err != nil {
-		if isConnectionError(err.(*amqp.Error)) {
-			succeded(false)
-		}
-		// Error did not render broker unavailable.
-		succeded(true)
-
+		callSucceded(!isConnectionError(err))
 		setSpanErr(span, err)
 		return err
 	}
-	succeded(true)
+	callSucceded(true)
 	return nil
 }
 
@@ -131,12 +123,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		nil,     // arguments
 	)
 	if err != nil {
-		if isConnectionError(err.(*amqp.Error)) {
-			callSucceded(false)
-		}
-		// Error did not render broker unavailable.
-		callSucceded(true)
-
+		callSucceded(!isConnectionError(err))
 		return nil, err
 	}
 	callSucceded(true)
@@ -158,12 +145,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		nil,                // Additional args
 	)
 	if err != nil {
-		if isConnectionError(err.(*amqp.Error)) {
-			callSucceded(false)
-		}
-		// Error did not render broker unavailable.
-		callSucceded(true)
-
+		callSucceded(!isConnectionError(err))
 		return nil, err
 	}
 	callSucceded(true)
@@ -187,12 +169,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		nil,             // args
 	)
 	if err != nil {
-		if isConnectionError(err.(*amqp.Error)) {
-			callSucceded(false)
-		}
-		// Error did not render broker unavailable.
-		callSucceded(true)
-
+		callSucceded(!isConnectionError(err))
 		return nil, err
 	}
 	callSucceded(true)
@@ -202,7 +179,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 			select {
 			case delivery := <-deliveries:
 				delivery.Ack(false)
-				_, span := mq.tracer.Start(ctx, "rabbitmq.Consume")
+				_, span := mq.opts.tracer.Start(ctx, "rabbitmq.Consume")
 				defer span.End()
 
 				message := Message{

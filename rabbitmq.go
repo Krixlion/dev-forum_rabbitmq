@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
-
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sony/gobreaker"
 )
@@ -24,16 +22,15 @@ type RabbitMQ struct {
 	config       Config
 	url          string // Connection string to RabbitMQ broker.
 
-	connection *amqp.Connection
-	connMutex  sync.Mutex // Mutex protecting connection during reconnecting.
+	conn      *amqp.Connection
+	breaker   *gobreaker.TwoStepCircuitBreaker
+	connMutex sync.Mutex // Mutex protecting connection during reconnecting.
 
 	notifyConnClose chan *amqp.Error        // Channel to watch for errors from the broker in order to renew the connection.
 	publishQueue    chan Message            // Queue for messages waiting to be republished.
 	readChannel     chan chan *amqp.Channel // Access channel for accessing the RabbitMQ Channel in a thread-safe way.
 
-	tracer  trace.Tracer
-	breaker *gobreaker.TwoStepCircuitBreaker
-	logger  Logger
+	opts options
 }
 
 // NewRabbitMQ returns a new initialized connection struct.
@@ -61,12 +58,14 @@ type RabbitMQ struct {
 //		rabbit := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config, nil, nil)
 //		defer rabbit.Close()
 //	}
-func NewRabbitMQ(consumer, user, pass, host, port string, config Config, logger Logger, tracer trace.Tracer) *RabbitMQ {
+func NewRabbitMQ(consumer, user, pass, host, port string, config Config, opts ...Option) *RabbitMQ {
 	url := fmt.Sprintf("amqp://%s:%s@%s:%s/", user, pass, host, port)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Make sure there is at least one worker.
-	config.MaxWorkers++
+	if config.MaxWorkers == 0 {
+		config.MaxWorkers++
+	}
 
 	mq := &RabbitMQ{
 		consumerName: consumer,
@@ -79,9 +78,8 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, logger 
 
 		connMutex: sync.Mutex{},
 		url:       url,
-		logger:    nullLogger{},
-		tracer:    nullTracer{},
 		config:    config,
+		opts:      defaultOptions(),
 		breaker: gobreaker.NewTwoStepCircuitBreaker(gobreaker.Settings{
 			Name:        consumer,
 			MaxRequests: config.MaxRequests,
@@ -90,15 +88,11 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, logger 
 		}),
 	}
 
-	if logger != nil {
-		mq.logger = logger
+	for _, opt := range opts {
+		opt.apply(&mq.opts)
 	}
 
-	if tracer != nil {
-		mq.tracer = tracer
-	}
-
-	mq.run()
+	defer mq.run()
 	return mq
 }
 
@@ -106,7 +100,7 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, logger 
 // seperate goroutines while blocking the goroutine it was called from.
 // You should use Close() in order to shutdown the connection.
 func (mq *RabbitMQ) run() {
-	mq.logger.Log(mq.ctx, "Connecting to RabbitMQ")
+	mq.opts.logger.Log(mq.ctx, "Connecting to RabbitMQ")
 	mq.ReDial(mq.ctx)
 	go mq.runPublishQueue(mq.ctx)
 	go mq.handleConnectionErrors(mq.ctx)
@@ -116,10 +110,10 @@ func (mq *RabbitMQ) run() {
 // Close closes active connection gracefully.
 func (mq *RabbitMQ) Close() error {
 	mq.shutdown()
-	if mq.connection != nil && !mq.connection.IsClosed() {
-		mq.logger.Log(mq.ctx, "Closing active connections")
-		if err := mq.connection.Close(); err != nil {
-			mq.logger.Log(mq.ctx, "Failed to close active connections", "err", err)
+	if mq.conn != nil && !mq.conn.IsClosed() {
+		mq.opts.logger.Log(mq.ctx, "Closing active connections")
+		if err := mq.conn.Close(); err != nil {
+			mq.opts.logger.Log(mq.ctx, "Failed to close active connections", "err", err)
 			return err
 		}
 	}
@@ -139,7 +133,7 @@ func (mq *RabbitMQ) handleChannelReads(ctx context.Context) {
 		case req := <-mq.readChannel:
 			limiter <- struct{}{}
 			go func() {
-				ctx, span := mq.tracer.Start(ctx, "rabbitmq.handleChannelRead")
+				ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.handleChannelRead")
 				defer span.End()
 				defer func() { <-limiter }()
 				succedeed, err := mq.breaker.Allow()
@@ -149,10 +143,10 @@ func (mq *RabbitMQ) handleChannelReads(ctx context.Context) {
 					return
 				}
 
-				channel, err := mq.connection.Channel()
+				channel, err := mq.conn.Channel()
 				if err != nil {
 					req <- nil
-					mq.logger.Log(ctx, "Failed to open a new channel", "err", err)
+					mq.opts.logger.Log(ctx, "Failed to open a new channel", "err", err)
 					succedeed(false)
 					setSpanErr(span, err)
 					return
@@ -194,9 +188,9 @@ func (mq *RabbitMQ) ReDial(ctx context.Context) {
 			return
 		}
 
-		mq.logger.Log(ctx, "Failed to connect to RabbitMQ", "err", err)
+		mq.opts.logger.Log(ctx, "Failed to connect to RabbitMQ", "err", err)
 		time.Sleep(mq.config.ReconnectInterval)
-		mq.logger.Log(ctx, "Reconnecting to RabbitMQ")
+		mq.opts.logger.Log(ctx, "Reconnecting to RabbitMQ")
 	}
 }
 
@@ -217,7 +211,7 @@ func (mq *RabbitMQ) dial() error {
 
 	mq.connMutex.Lock()
 	mq.notifyConnClose = conn.NotifyClose(mq.notifyConnClose)
-	mq.connection = conn
+	mq.conn = conn
 	mq.connMutex.Unlock()
 
 	return nil

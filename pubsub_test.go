@@ -62,7 +62,7 @@ func setUpMQ() *rabbitmq.RabbitMQ {
 		ClosedTimeout:     time.Second * 15,
 		MaxWorkers:        10,
 	}
-	mq := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config, nil, nil)
+	mq := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config)
 	return mq
 }
 

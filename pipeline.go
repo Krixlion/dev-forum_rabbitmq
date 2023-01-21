@@ -7,22 +7,24 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+var ErrFullQueue = errors.New("publish queue is full")
+
 // enqueue appends a message to the publishQueue and return a non-nil error if the queue is full.
 func (mq *RabbitMQ) Enqueue(msg Message) error {
 	select {
 	case mq.publishQueue <- msg:
 		return nil
 	default:
-		return errors.New("publish queue is full")
+		return ErrFullQueue
 	}
 }
 
 func (mq *RabbitMQ) tryToEnqueue(ctx context.Context, message Message, err error, logErrorMessage string) {
 	if err := mq.Enqueue(message); err != nil {
-		mq.logger.Log(ctx, "Failed to enqueue message", "err", err)
+		mq.opts.logger.Log(ctx, "Failed to enqueue message", "err", err)
 	}
 
-	mq.logger.Log(ctx, logErrorMessage, "err", err)
+	mq.opts.logger.Log(ctx, logErrorMessage, "err", err)
 }
 
 func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Message) {
@@ -37,7 +39,7 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 			case message := <-messages:
 				limiter <- struct{}{}
 				go func() {
-					ctx, span := mq.tracer.Start(ctx, "rabbitmq.publishPipelined")
+					ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.publishPipelined")
 					defer span.End()
 					defer func() { <-limiter }()
 
@@ -61,13 +63,7 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 					)
 					if err != nil {
 						setSpanErr(span, err)
-
-						if isConnectionError(err.(*amqp.Error)) {
-							callSucceded(false)
-						}
-						// Error did not render broker unavailable.
-						callSucceded(true)
-
+						callSucceded(!isConnectionError(err))
 						mq.tryToEnqueue(ctx, message, err, "Failed to publish msg")
 						return
 					}
@@ -95,7 +91,7 @@ func (mq *RabbitMQ) prepareExchangePipelined(ctx context.Context, msgs <-chan Me
 			case message := <-msgs:
 				limiter <- struct{}{}
 				go func() {
-					ctx, span := mq.tracer.Start(ctx, "rabbitmq.prepareExchangePipelined")
+					ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.prepareExchangePipelined")
 					defer span.End()
 					defer func() { <-limiter }()
 
@@ -114,12 +110,7 @@ func (mq *RabbitMQ) prepareExchangePipelined(ctx context.Context, msgs <-chan Me
 						nil,                  // arguments
 					)
 					if err != nil {
-						if isConnectionError(err.(*amqp.Error)) {
-							callSucceded(false)
-						}
-						// Error did not render broker unavailable.
-						callSucceded(true)
-
+						callSucceded(!isConnectionError(err))
 						setSpanErr(span, err)
 						mq.tryToEnqueue(ctx, message, err, "Failed to declare exchange")
 						return

@@ -35,6 +35,18 @@ type Logger interface {
 	Log(ctx context.Context, msg string, keyvals ...interface{})
 }
 
+type Option interface {
+	apply(*options)
+}
+
+func WithTracer(tracer trace.Tracer) Option {
+	return tracerOption{tracer}
+}
+
+func WithLogger(logger Logger) Option {
+	return loggerOption{logger}
+}
+
 type nullLogger struct{}
 
 func (nullLogger) Log(context.Context, string, ...any) {}
@@ -60,4 +72,32 @@ func (nullSpan) TracerProvider() trace.TracerProvider                { return ni
 func setSpanErr(span trace.Span, err error) {
 	span.RecordError(err)
 	span.SetStatus(codes.Error, err.Error())
+}
+
+type options struct {
+	tracer trace.Tracer
+	logger Logger
+}
+
+func defaultOptions() options {
+	return options{
+		tracer: nullTracer{},
+		logger: nullLogger{},
+	}
+}
+
+type tracerOption struct {
+	tracer trace.Tracer
+}
+
+func (opt tracerOption) apply(opts *options) {
+	opts.tracer = opt.tracer
+}
+
+type loggerOption struct {
+	logger Logger
+}
+
+func (opt loggerOption) apply(opts *options) {
+	opts.logger = opt.logger
 }
