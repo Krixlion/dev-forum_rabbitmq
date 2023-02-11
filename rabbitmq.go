@@ -44,6 +44,8 @@ type RabbitMQ struct {
 //		port := "5672"
 //		consumer := "user-service" //  Unique name for each consumer used to sign messages.
 //
+//		var customLogger Logger
+//
 //		// You can specify your own config or use rabbitmq.DefaultConfig() instead.
 //		config := Config{
 //			QueueSize:         100,
@@ -54,8 +56,8 @@ type RabbitMQ struct {
 //			ClosedTimeout:     time.Second * 5,
 //		}
 //
-//		// Logger and tracer are optional - pass nil if you don't want Rabbit to log or trace.
-//		rabbit := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config, nil, nil)
+//		// Logger and tracer are optional.
+//		rabbit := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config, WithLogger(customLogger))
 //		defer rabbit.Close()
 //	}
 func NewRabbitMQ(consumer, user, pass, host, port string, config Config, opts ...Option) *RabbitMQ {
