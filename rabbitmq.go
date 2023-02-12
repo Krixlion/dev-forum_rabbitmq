@@ -180,6 +180,9 @@ func (mq *RabbitMQ) handleConnectionErrors(ctx context.Context) {
 }
 
 func (mq *RabbitMQ) ReDial(ctx context.Context) {
+	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.ReDial")
+	defer span.End()
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return
@@ -190,6 +193,8 @@ func (mq *RabbitMQ) ReDial(ctx context.Context) {
 			return
 		}
 
+		setSpanErr(span, err)
+
 		mq.opts.logger.Log(ctx, "Failed to connect to RabbitMQ", "err", err)
 		time.Sleep(mq.config.ReconnectInterval)
 		mq.opts.logger.Log(ctx, "Reconnecting to RabbitMQ")
@@ -197,8 +202,16 @@ func (mq *RabbitMQ) ReDial(ctx context.Context) {
 }
 
 // dial renews current TCP connection.
-func (mq *RabbitMQ) dial() error {
-	callSucceded, err := mq.breaker.Allow()
+func (mq *RabbitMQ) dial() (err error) {
+	_, span := mq.opts.tracer.Start(context.Background(), "rabbitmq.dial")
+	defer func() {
+		if err != nil {
+			setSpanErr(span, err)
+		}
+		span.End()
+	}()
+
+	ok, err := mq.breaker.Allow()
 	if err != nil {
 		return err
 	}
@@ -206,10 +219,10 @@ func (mq *RabbitMQ) dial() error {
 	conn, err := amqp.Dial(mq.url)
 	if err != nil {
 		// If not conn error then broker is available.
-		callSucceded(!isConnectionError(err))
+		ok(!isConnectionError(err))
 		return err
 	}
-	callSucceded(true)
+	ok(true)
 
 	mq.connMutex.Lock()
 	mq.notifyConnClose = conn.NotifyClose(mq.notifyConnClose)

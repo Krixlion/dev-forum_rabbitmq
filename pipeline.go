@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var ErrFullQueue = errors.New("publish queue is full")
@@ -39,11 +40,11 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 			case message := <-messages:
 				limiter <- struct{}{}
 				go func() {
-					ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.publishPipelined")
+					ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.publishPipelined", trace.WithSpanKind(trace.SpanKindProducer))
 					defer span.End()
 					defer func() { <-limiter }()
 
-					callSucceded, err := mq.breaker.Allow()
+					ok, err := mq.breaker.Allow()
 					if err != nil {
 						setSpanErr(span, err)
 						mq.tryToEnqueue(ctx, message, err, "Failed to publish msg")
@@ -63,11 +64,11 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 					)
 					if err != nil {
 						setSpanErr(span, err)
-						callSucceded(!isConnectionError(err))
+						ok(!isConnectionError(err))
 						mq.tryToEnqueue(ctx, message, err, "Failed to publish msg")
 						return
 					}
-					callSucceded(true)
+					ok(true)
 				}()
 
 			case <-ctx.Done():
@@ -95,7 +96,7 @@ func (mq *RabbitMQ) prepareExchangePipelined(ctx context.Context, msgs <-chan Me
 					defer span.End()
 					defer func() { <-limiter }()
 
-					callSucceded, err := mq.breaker.Allow()
+					ok, err := mq.breaker.Allow()
 					if err != nil {
 						mq.tryToEnqueue(ctx, message, err, "Failed to prepare exchange before publishing")
 					}
@@ -110,12 +111,12 @@ func (mq *RabbitMQ) prepareExchangePipelined(ctx context.Context, msgs <-chan Me
 						nil,                  // arguments
 					)
 					if err != nil {
-						callSucceded(!isConnectionError(err))
+						ok(!isConnectionError(err))
 						setSpanErr(span, err)
 						mq.tryToEnqueue(ctx, message, err, "Failed to declare exchange")
 						return
 					}
-					callSucceded(true)
+					ok(true)
 
 					preparedMessages <- message
 				}()
