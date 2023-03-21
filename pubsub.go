@@ -11,7 +11,7 @@ func (mq *RabbitMQ) Publish(ctx context.Context, msg Message) error {
 	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.Publish", trace.WithSpanKind(trace.SpanKindProducer))
 	defer span.End()
 
-	if err := mq.prepareExchange(ctx, msg); err != nil {
+	if err := mq.prepareExchange(ctx, msg.Route); err != nil {
 		setSpanErr(span, err)
 		return err
 	}
@@ -25,7 +25,7 @@ func (mq *RabbitMQ) Publish(ctx context.Context, msg Message) error {
 }
 
 // prepareExchange validates a message and declares a RabbitMQ exchange derived from the message.
-func (mq *RabbitMQ) prepareExchange(ctx context.Context, msg Message) error {
+func (mq *RabbitMQ) prepareExchange(ctx context.Context, route Route) error {
 	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.prepareExchange")
 	defer span.End()
 
@@ -44,13 +44,13 @@ func (mq *RabbitMQ) prepareExchange(ctx context.Context, msg Message) error {
 	}
 
 	err = ch.ExchangeDeclare(
-		msg.ExchangeName, // name
-		msg.ExchangeType, // type
-		true,             // durable
-		false,            // auto-deleted
-		false,            // internal
-		false,            // no-wait
-		nil,              // arguments
+		route.ExchangeName, // name
+		route.ExchangeType, // type
+		true,               // durable
+		false,              // auto-deleted
+		false,              // internal
+		false,              // no-wait
+		nil,                // arguments
 	)
 	if err != nil {
 		ok(!isConnectionError(err))
@@ -204,6 +204,8 @@ func (mq *RabbitMQ) prepareQueue(ctx context.Context, command string, route Rout
 		return amqp.Queue{}, err
 	}
 
+	mq.prepareExchange(ctx, route)
+
 	err = ch.QueueBind(
 		queue.Name,         // queue name
 		route.RoutingKey,   // routing key
@@ -215,7 +217,7 @@ func (mq *RabbitMQ) prepareQueue(ctx context.Context, command string, route Rout
 		ok(!isConnectionError(err))
 		return amqp.Queue{}, err
 	}
-
 	ok(true)
-	return
+
+	return queue, nil
 }

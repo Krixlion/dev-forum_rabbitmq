@@ -104,6 +104,7 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, opts ..
 func (mq *RabbitMQ) run() {
 	mq.opts.logger.Log(mq.ctx, "Connecting to RabbitMQ")
 	mq.ReDial(mq.ctx)
+
 	go mq.runPublishQueue(mq.ctx)
 	go mq.handleConnectionErrors(mq.ctx)
 	go mq.handleChannelReads(mq.ctx)
@@ -112,16 +113,20 @@ func (mq *RabbitMQ) run() {
 // Close closes active connection gracefully.
 func (mq *RabbitMQ) Close() error {
 	mq.shutdown()
+
 	if mq.conn != nil && !mq.conn.IsClosed() {
 		mq.opts.logger.Log(mq.ctx, "Closing active connections")
+
 		if err := mq.conn.Close(); err != nil {
 			mq.opts.logger.Log(mq.ctx, "Failed to close active connections", "err", err)
 			return err
 		}
 	}
+
 	return nil
 }
 
+// runPublishQueue is meant to be run in a seperate goroutine.
 func (mq *RabbitMQ) runPublishQueue(ctx context.Context) {
 	preparedMessages := mq.prepareExchangePipelined(ctx, mq.publishQueue)
 	mq.publishPipelined(ctx, preparedMessages)
@@ -179,6 +184,7 @@ func (mq *RabbitMQ) handleConnectionErrors(ctx context.Context) {
 	}
 }
 
+// ReDial will keep reconecting until it succeeds.
 func (mq *RabbitMQ) ReDial(ctx context.Context) {
 	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.ReDial")
 	defer span.End()
@@ -232,7 +238,7 @@ func (mq *RabbitMQ) dial() (err error) {
 	return nil
 }
 
-// askForChannel returns *amqp.channel in a thread-safe way.
+// askForChannel returns a *amqp.Channel in a thread-safe way.
 func (mq *RabbitMQ) askForChannel() *amqp.Channel {
 	for {
 		ask := make(chan *amqp.Channel)

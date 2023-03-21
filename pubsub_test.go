@@ -141,3 +141,20 @@ func TestPubSub(t *testing.T) {
 		})
 	}
 }
+
+func TestIfExchangeIsCreatedBeforeBindingQueue(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	mq := setUpMQ()
+	defer mq.Close()
+
+	_, err := mq.Consume(ctx, "testingQueue", rabbitmq.Route{
+		ExchangeName: randomString(7),
+		ExchangeType: "topic",
+		RoutingKey:   randomString(6),
+	})
+	if err != nil {
+		t.Fatalf("RabbitMQ.Consume() error = %+v\n", err)
+	}
+}
