@@ -25,8 +25,8 @@ func example() {
 		ClosedTimeout:     time.Second * 5,
 	}
 
-	// Logger and tracer are optional - pass nil if you don't want Rabbit to log or trace.
-	rabbit := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config, nil, nil)
+	// Logger and tracer are optional.
+	rabbit := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config, WithLogger(customLogger))
 	defer rabbit.Close()
 }
 ```
