@@ -103,7 +103,7 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, opts ..
 // You should use Close() in order to shutdown the connection.
 func (mq *RabbitMQ) run() {
 	mq.opts.logger.Log(mq.ctx, "Connecting to RabbitMQ")
-	mq.ReDial(mq.ctx)
+	mq.reDial(mq.ctx)
 
 	go mq.runPublishQueue(mq.ctx)
 	go mq.handleConnectionErrors(mq.ctx)
@@ -176,7 +176,7 @@ func (mq *RabbitMQ) handleConnectionErrors(ctx context.Context) {
 			if e == nil {
 				continue
 			}
-			mq.ReDial(ctx)
+			mq.reDial(ctx)
 
 		case <-ctx.Done():
 			return
@@ -184,8 +184,8 @@ func (mq *RabbitMQ) handleConnectionErrors(ctx context.Context) {
 	}
 }
 
-// ReDial will keep reconecting until it succeeds.
-func (mq *RabbitMQ) ReDial(ctx context.Context) {
+// reDial will keep reconecting until it succeeds.
+func (mq *RabbitMQ) reDial(ctx context.Context) {
 	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.ReDial")
 	defer span.End()
 
