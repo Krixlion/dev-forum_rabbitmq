@@ -77,8 +77,6 @@ func randomString(length int) string {
 
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
-
-	os.Exit(m.Run())
 }
 
 func TestPubSub(t *testing.T) {
