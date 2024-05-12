@@ -195,8 +195,14 @@ func (mq *RabbitMQ) prepareQueue(ctx context.Context, command string, route Rout
 		ok(!isConnectionError(err))
 		return amqp.Queue{}, err
 	}
+	ok(true)
 
 	if err := ctx.Err(); err != nil {
+		return amqp.Queue{}, err
+	}
+
+	if err := mq.prepareExchange(ctx, route); err != nil {
+		ok(!isConnectionError(err))
 		return amqp.Queue{}, err
 	}
 
@@ -204,8 +210,6 @@ func (mq *RabbitMQ) prepareQueue(ctx context.Context, command string, route Rout
 	if err != nil {
 		return amqp.Queue{}, err
 	}
-
-	mq.prepareExchange(ctx, route)
 
 	err = ch.QueueBind(
 		queue.Name,         // queue name
