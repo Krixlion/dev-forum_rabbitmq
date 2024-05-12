@@ -210,7 +210,7 @@ func (mq *RabbitMQ) prepareQueue(ctx context.Context, command string, route Rout
 		queue.Name,         // queue name
 		route.RoutingKey,   // routing key
 		route.ExchangeName, // exchange
-		false,              // Immidiate
+		false,              // Immediate
 		nil,                // Additional args
 	)
 	if err != nil {

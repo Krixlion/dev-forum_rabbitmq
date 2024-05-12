@@ -99,7 +99,7 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, opts ..
 }
 
 // run initializes the RabbitMQ connection and manages it in
-// seperate goroutines while blocking the goroutine it was called from.
+// separate goroutines while blocking the goroutine it was called from.
 // You should use Close() in order to shutdown the connection.
 func (mq *RabbitMQ) run() {
 	mq.opts.logger.Log(mq.ctx, "Connecting to RabbitMQ")
@@ -126,13 +126,13 @@ func (mq *RabbitMQ) Close() error {
 	return nil
 }
 
-// runPublishQueue is meant to be run in a seperate goroutine.
+// runPublishQueue is meant to be run in a separate goroutine.
 func (mq *RabbitMQ) runPublishQueue(ctx context.Context) {
 	preparedMessages := mq.prepareExchangePipelined(ctx, mq.publishQueue)
 	mq.publishPipelined(ctx, preparedMessages)
 }
 
-// handleChannelReads is meant to be run in a seperate goroutine.
+// handleChannelReads is meant to be run in a separate goroutine.
 func (mq *RabbitMQ) handleChannelReads(ctx context.Context) {
 	limiter := make(chan struct{}, mq.config.MaxWorkers)
 	for {
@@ -168,7 +168,7 @@ func (mq *RabbitMQ) handleChannelReads(ctx context.Context) {
 	}
 }
 
-// handleConnectionErrors is meant to be run in a seperate goroutine.
+// handleConnectionErrors is meant to be run in a separate goroutine.
 func (mq *RabbitMQ) handleConnectionErrors(ctx context.Context) {
 	for {
 		select {
