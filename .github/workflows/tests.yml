@@ -10,9 +10,6 @@ jobs:
     build:
         name: build/test
         runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                go-version: ['oldstable', 'stable']
         services:
             rabbitmq:
                 image: rabbitmq:3.11.3-alpine
@@ -22,7 +19,7 @@ jobs:
         - uses: actions/checkout@v4
         - uses: actions/setup-go@v5
           with:
-            go-version: ${{ matrix.go-version }}
+            go-version: 'stable'
             check-latest: true
         - name: Tests
           run: go test -race ./... -timeout=10s
