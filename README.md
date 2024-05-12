@@ -6,6 +6,10 @@ Although this is a one-man project, contributions are welcome.
 Please feel free to open issues or submit pull requests.
 
 # dev-forum_rabbitmq
+[![GoDoc](https://godoc.org/github.com/krixlion/dev_forum-rabbitmq?status.svg)](https://godoc.org/github.com/krixlion/dev_forum-rabbitmq)
+[![Go Report Card](https://goreportcard.com/badge/github.com/krixlion/dev_forum-rabbitmq)](https://goreportcard.com/report/github.com/krixlion/dev_forum-rabbitmq)
+[![GitHub License](https://img.shields.io/github/license/krixlion/dev_forum-rabbitmq)](LICENSE)
+
 RabbitMQ library made on top of [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) for dev-forum project. 
 
 ## Usage
