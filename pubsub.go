@@ -110,6 +110,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 	queue, err := mq.prepareQueue(ctx, command, route)
 	if err != nil {
 		setSpanErr(span, err)
+		return nil, err
 	}
 
 	ok, err := mq.breaker.Allow()
