@@ -119,7 +119,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		return nil, err
 	}
 
-	deliveries, err := ch.Consume(
+	deliveries, err := ch.ConsumeWithContext(ctx,
 		queue.Name,      // queue
 		mq.consumerName, // consumer
 		false,           // auto ack
