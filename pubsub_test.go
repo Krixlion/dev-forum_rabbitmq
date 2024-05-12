@@ -137,6 +137,9 @@ func TestPubSub(t *testing.T) {
 }
 
 func TestIfExchangeIsCreatedBeforeBindingQueue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test...")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
