@@ -87,7 +87,7 @@ func TestPubSub(t *testing.T) {
 	testData := randomString(5)
 	data, err := json.Marshal(testData)
 	if err != nil {
-		t.Fatalf("Failed to marshal article, input: %+v, err: %s", testData, err)
+		t.Fatalf("Failed to marshal string, input: %+v, err: %s", testData, err)
 	}
 
 	testCases := []struct {
