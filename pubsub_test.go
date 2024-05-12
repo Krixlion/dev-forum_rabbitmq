@@ -16,8 +16,6 @@ import (
 	"go.uber.org/goleak"
 )
 
-const consumer = "TESTING"
-
 var (
 	port string
 	host string
@@ -25,13 +23,14 @@ var (
 	pass string
 )
 
-func init() {
-	var ok bool
-	err := godotenv.Load()
-	if err != nil {
-		panic(err)
+func setUpMQ(t *testing.T) *rabbitmq.RabbitMQ {
+	const consumer = "TESTING"
+
+	if err := godotenv.Load(); err != nil {
+		t.Logf("Failed to load env file, using default settings, err: %s", err)
 	}
 
+	var ok bool
 	port, ok = os.LookupEnv("MQ_PORT")
 	if !ok || port == "" {
 		port = "5672"
@@ -51,9 +50,7 @@ func init() {
 	if !ok || pass == "" {
 		pass = "guest"
 	}
-}
 
-func setUpMQ() *rabbitmq.RabbitMQ {
 	config := rabbitmq.Config{
 		QueueSize:         100,
 		ReconnectInterval: time.Millisecond * 100,
@@ -62,8 +59,7 @@ func setUpMQ() *rabbitmq.RabbitMQ {
 		ClosedTimeout:     time.Second * 15,
 		MaxWorkers:        10,
 	}
-	mq := rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config)
-	return mq
+	return rabbitmq.NewRabbitMQ(consumer, user, pass, host, port, config)
 }
 
 func randomString(length int) string {
@@ -81,7 +77,7 @@ func TestMain(m *testing.M) {
 
 func TestPubSub(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping Pub/Sub integration test")
+		t.Skip("Skipping Pub/Sub integration test...")
 	}
 
 	testData := randomString(5)
@@ -116,7 +112,7 @@ func TestPubSub(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			mq := setUpMQ()
+			mq := setUpMQ(t)
 			defer mq.Close()
 
 			err := mq.Publish(ctx, tC.msg)
@@ -144,7 +140,7 @@ func TestIfExchangeIsCreatedBeforeBindingQueue(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	mq := setUpMQ()
+	mq := setUpMQ(t)
 	defer mq.Close()
 
 	_, err := mq.Consume(ctx, "testingQueue", rabbitmq.Route{

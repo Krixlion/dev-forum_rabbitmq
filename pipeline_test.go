@@ -48,7 +48,7 @@ func TestPubSubPipeline(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			mq := setUpMQ()
+			mq := setUpMQ(t)
 			defer mq.Close()
 
 			err := mq.Enqueue(tC.msg)
