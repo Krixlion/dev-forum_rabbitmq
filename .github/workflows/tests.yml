@@ -1,4 +1,4 @@
-name: amqp091-go
+name: Tests
 
 on:
     push:
@@ -7,8 +7,8 @@ on:
         branches: [main]
 
 jobs:
-    build:
-        name: build/test
+    test:
+        name: Run tests
         runs-on: ubuntu-latest
         services:
             rabbitmq:
