@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/embedded"
 )
 
 type Config struct {
@@ -47,18 +48,27 @@ func WithLogger(logger Logger) Option {
 	return loggerOption{logger}
 }
 
+var _ Logger = (*nullLogger)(nil)
+
 type nullLogger struct{}
 
 func (nullLogger) Log(context.Context, string, ...any) {}
 
-type nullTracer struct{}
+var _ trace.Tracer = (*nullTracer)(nil)
+
+type nullTracer struct {
+	embedded.Tracer
+}
 
 func (nullTracer) Start(ctx context.Context, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
 	return ctx, nullSpan{}
 }
 
-type nullSpan struct{}
+type nullSpan struct {
+	embedded.Span
+}
 
+func (nullSpan) AddLink(link trace.Link)                             {}
 func (nullSpan) End(options ...trace.SpanEndOption)                  {}
 func (nullSpan) AddEvent(name string, options ...trace.EventOption)  {}
 func (nullSpan) IsRecording() bool                                   { return false }
