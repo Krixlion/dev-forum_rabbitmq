@@ -44,7 +44,6 @@ func TestPubSubPipeline(t *testing.T) {
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 

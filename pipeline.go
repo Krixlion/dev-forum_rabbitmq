@@ -60,6 +60,7 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 							ContentType: string(message.ContentType),
 							Body:        message.Body,
 							Timestamp:   message.Timestamp,
+							Headers:     injectAMQPHeaders(ctx),
 						},
 					)
 					if err != nil {

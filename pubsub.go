@@ -89,6 +89,7 @@ func (mq *RabbitMQ) publish(ctx context.Context, msg Message) error {
 			ContentType: string(msg.ContentType),
 			Body:        msg.Body,
 			Timestamp:   msg.Timestamp,
+			Headers:     injectAMQPHeaders(ctx),
 		},
 	)
 	if err != nil {
@@ -139,9 +140,12 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		for {
 			select {
 			case delivery := <-deliveries:
-				delivery.Ack(false)
-				_, span := mq.opts.tracer.Start(ctx, "rabbitmq.Consume send", trace.WithSpanKind(trace.SpanKindConsumer))
+				_, span := mq.opts.tracer.Start(extractAMQPHeaders(ctx, delivery.Headers), "rabbitmq.Consume send", trace.WithSpanKind(trace.SpanKindConsumer))
 				defer span.End()
+
+				if err := delivery.Ack(false); err != nil {
+					mq.opts.logger.Log(ctx, "Failed to acknowledge message delivery", "err", err)
+				}
 
 				message := Message{
 					Route:       route,
