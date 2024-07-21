@@ -40,7 +40,7 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 			case message := <-messages:
 				limiter <- struct{}{}
 				go func() {
-					ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.publishPipelined", trace.WithSpanKind(trace.SpanKindProducer))
+					ctx, span := mq.opts.tracer.Start(ExtractAMQPHeaders(ctx, message.Headers), "rabbitmq.publishPipelined", trace.WithSpanKind(trace.SpanKindProducer))
 					defer span.End()
 					defer func() { <-limiter }()
 
@@ -60,7 +60,7 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 							ContentType: string(message.ContentType),
 							Body:        message.Body,
 							Timestamp:   message.Timestamp,
-							Headers:     injectAMQPHeaders(ctx),
+							Headers:     InjectAMQPHeaders(ctx),
 						},
 					)
 					if err != nil {
@@ -93,7 +93,7 @@ func (mq *RabbitMQ) prepareExchangePipelined(ctx context.Context, msgs <-chan Me
 			case message := <-msgs:
 				limiter <- struct{}{}
 				go func() {
-					ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.prepareExchangePipelined")
+					ctx, span := mq.opts.tracer.Start(ExtractAMQPHeaders(ctx, message.Headers), "rabbitmq.prepareExchangePipelined", trace.WithSpanKind(trace.SpanKindProducer))
 					defer span.End()
 					defer func() { <-limiter }()
 

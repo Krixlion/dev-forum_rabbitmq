@@ -34,15 +34,15 @@ func (a amqpHeadersCarrier) Keys() []string {
 	return r
 }
 
-// injectAMQPHeaders injects the trace data from the context into the header map.
-func injectAMQPHeaders(ctx context.Context) map[string]interface{} {
+// InjectAMQPHeaders injects the trace data from the context into the header map.
+func InjectAMQPHeaders(ctx context.Context) map[string]interface{} {
 	h := make(amqpHeadersCarrier)
 	otel.GetTextMapPropagator().Inject(ctx, h)
 	return h
 }
 
-// extractAMQPHeaders extracts the trace data from the header and puts it into the context.
-func extractAMQPHeaders(ctx context.Context, headers map[string]interface{}) context.Context {
+// ExtractAMQPHeaders extracts the trace data from the header and puts it into the context.
+func ExtractAMQPHeaders(ctx context.Context, headers map[string]interface{}) context.Context {
 	return otel.GetTextMapPropagator().Extract(ctx, amqpHeadersCarrier(headers))
 }
 
