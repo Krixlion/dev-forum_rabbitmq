@@ -17,7 +17,6 @@ const (
 
 type RabbitMQ struct {
 	consumerName string
-	ctx          context.Context
 	shutdown     context.CancelFunc
 	config       Config
 	url          string // Connection string to RabbitMQ broker.
@@ -71,7 +70,6 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, opts ..
 
 	mq := &RabbitMQ{
 		consumerName: consumer,
-		ctx:          ctx,
 		shutdown:     cancel,
 
 		publishQueue:    make(chan Message, config.QueueSize),
@@ -94,20 +92,20 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, opts ..
 		opt.apply(&mq.opts)
 	}
 
-	defer mq.run()
+	defer mq.run(ctx)
 	return mq
 }
 
 // run initializes the RabbitMQ connection and manages it in
 // separate goroutines while blocking the goroutine it was called from.
 // You should use Close() in order to shutdown the connection.
-func (mq *RabbitMQ) run() {
-	mq.opts.logger.Log(mq.ctx, "Connecting to RabbitMQ")
-	mq.reDial(mq.ctx)
+func (mq *RabbitMQ) run(ctx context.Context) {
+	mq.opts.logger.Log(ctx, "Connecting to RabbitMQ")
+	mq.reDial(ctx)
 
-	go mq.runPublishQueue(mq.ctx)
-	go mq.handleConnectionErrors(mq.ctx)
-	go mq.handleChannelReads(mq.ctx)
+	go mq.runPublishQueue(ctx)
+	go mq.handleConnectionErrors(ctx)
+	go mq.handleChannelReads(ctx)
 }
 
 // Close closes active connection gracefully.
@@ -115,10 +113,7 @@ func (mq *RabbitMQ) Close() error {
 	mq.shutdown()
 
 	if mq.conn != nil && !mq.conn.IsClosed() {
-		mq.opts.logger.Log(mq.ctx, "Closing active connections")
-
 		if err := mq.conn.Close(); err != nil {
-			mq.opts.logger.Log(mq.ctx, "Failed to close active connections", "err", err)
 			return err
 		}
 	}
@@ -194,7 +189,7 @@ func (mq *RabbitMQ) reDial(ctx context.Context) {
 			return
 		}
 
-		err := mq.dial()
+		err := mq.dial(ctx)
 		if err == nil {
 			return
 		}
@@ -208,8 +203,8 @@ func (mq *RabbitMQ) reDial(ctx context.Context) {
 }
 
 // dial renews current TCP connection.
-func (mq *RabbitMQ) dial() (err error) {
-	_, span := mq.opts.tracer.Start(context.Background(), "rabbitmq.dial")
+func (mq *RabbitMQ) dial(ctx context.Context) (err error) {
+	_, span := mq.opts.tracer.Start(ctx, "rabbitmq.dial")
 	defer func() {
 		if err != nil {
 			setSpanErr(span, err)
