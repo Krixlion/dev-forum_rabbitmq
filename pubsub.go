@@ -102,7 +102,7 @@ func (mq *RabbitMQ) publish(ctx context.Context, msg Message) error {
 }
 
 func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<-chan Message, error) {
-	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.Consume init", trace.WithSpanKind(trace.SpanKindConsumer))
+	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.Consume init")
 	defer span.End()
 
 	messages := make(chan Message)
@@ -141,7 +141,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 			select {
 			case delivery := <-deliveries:
 				func() {
-					ctx, span := mq.opts.tracer.Start(extractAMQPHeaders(ctx, delivery.Headers), "rabbitmq.Consume", trace.WithSpanKind(trace.SpanKindConsumer))
+					ctx, span := mq.opts.tracer.Start(extractAMQPHeaders(context.Background(), delivery.Headers), "rabbitmq.Consume", trace.WithSpanKind(trace.SpanKindConsumer))
 					defer span.End()
 
 					if err := delivery.Ack(false); err != nil {
