@@ -89,7 +89,7 @@ func (mq *RabbitMQ) publish(ctx context.Context, msg Message) error {
 			ContentType: string(msg.ContentType),
 			Body:        msg.Body,
 			Timestamp:   msg.Timestamp,
-			Headers:     InjectAMQPHeaders(ctx),
+			Headers:     injectAMQPHeaders(ctx),
 		},
 	)
 	if err != nil {
@@ -141,7 +141,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 			select {
 			case delivery := <-deliveries:
 				func() {
-					ctx, span := mq.opts.tracer.Start(ExtractAMQPHeaders(ctx, delivery.Headers), "rabbitmq.Consume", trace.WithSpanKind(trace.SpanKindConsumer))
+					ctx, span := mq.opts.tracer.Start(extractAMQPHeaders(ctx, delivery.Headers), "rabbitmq.Consume", trace.WithSpanKind(trace.SpanKindConsumer))
 					defer span.End()
 
 					if err := delivery.Ack(false); err != nil {

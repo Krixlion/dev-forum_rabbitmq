@@ -5,45 +5,41 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
-type amqpHeadersCarrier map[string]interface{}
+// injectAMQPHeaders injects the trace data from the context into the header map.
+func injectAMQPHeaders(ctx context.Context) map[string]interface{} {
+	m := map[string]string{}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(m))
 
-func (a amqpHeadersCarrier) Get(key string) string {
-	v, ok := a[key]
-	if !ok {
-		return ""
-	}
-	return v.(string)
-}
-
-func (a amqpHeadersCarrier) Set(key string, value string) {
-	a[key] = value
-}
-
-func (a amqpHeadersCarrier) Keys() []string {
-	i := 0
-	r := make([]string, len(a))
-
-	for k := range a {
-		r[i] = k
-		i++
+	headers := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		headers[k] = v
 	}
 
-	return r
+	return headers
 }
 
-// InjectAMQPHeaders injects the trace data from the context into the header map.
-func InjectAMQPHeaders(ctx context.Context) map[string]interface{} {
-	h := make(amqpHeadersCarrier)
-	otel.GetTextMapPropagator().Inject(ctx, h)
-	return h
+// extractAMQPHeaders extracts the trace data from the header and puts it
+// into the returned context. Any extracted non-string values are discarded.
+func extractAMQPHeaders(ctx context.Context, headers map[string]interface{}) context.Context {
+	m := make(map[string]string, len(headers))
+	for k, v := range headers {
+		str, ok := v.(string)
+		if !ok {
+			continue
+		}
+		m[k] = str
+	}
+
+	return otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(m))
 }
 
-// ExtractAMQPHeaders extracts the trace data from the header and puts it into the context.
-func ExtractAMQPHeaders(ctx context.Context, headers map[string]interface{}) context.Context {
-	return otel.GetTextMapPropagator().Extract(ctx, amqpHeadersCarrier(headers))
+// ExtractAMQPHeaders extracts the trace data from the header and puts it into the returned context.
+func ExtractMessageHeaders(ctx context.Context, headers map[string]string) context.Context {
+	return otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(headers))
 }
 
 func setSpanErr(span trace.Span, err error) {

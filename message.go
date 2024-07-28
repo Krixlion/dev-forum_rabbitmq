@@ -17,7 +17,7 @@ type Message struct {
 	Body        []byte
 	ContentType ContentType
 	Timestamp   time.Time
-	Headers     map[string]interface{}
+	Headers     map[string]string
 }
 
 type Route struct {
