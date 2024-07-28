@@ -8,7 +8,7 @@ import (
 )
 
 func (mq *RabbitMQ) Publish(ctx context.Context, msg Message) error {
-	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.Publish", trace.WithSpanKind(trace.SpanKindProducer))
+	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.Publish")
 	defer span.End()
 
 	if err := mq.prepareExchange(ctx, msg.Route); err != nil {
