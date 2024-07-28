@@ -157,6 +157,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 						Body:        delivery.Body,
 						ContentType: ContentType(delivery.ContentType),
 						Timestamp:   delivery.Timestamp,
+						Headers:     map[string]string{},
 					}
 					otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(message.Headers))
 
