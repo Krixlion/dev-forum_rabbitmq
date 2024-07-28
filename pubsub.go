@@ -140,7 +140,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		for {
 			select {
 			case delivery := <-deliveries:
-				_, span := mq.opts.tracer.Start(ExtractAMQPHeaders(ctx, delivery.Headers), "rabbitmq.Consume send", trace.WithSpanKind(trace.SpanKindConsumer))
+				ctx, span := mq.opts.tracer.Start(ExtractAMQPHeaders(ctx, delivery.Headers), "rabbitmq.Consume send", trace.WithSpanKind(trace.SpanKindConsumer))
 				defer span.End()
 
 				if err := delivery.Ack(false); err != nil {
