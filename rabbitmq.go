@@ -3,16 +3,12 @@ package rabbitmq
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sony/gobreaker"
-)
-
-const (
-	connectionError = 1
-	channelError    = 2
 )
 
 type RabbitMQ struct {
@@ -248,39 +244,20 @@ func (mq *RabbitMQ) askForChannel() *amqp.Channel {
 	}
 }
 
-func errorType(code int) int {
-	switch code {
-	case
+func isConnectionError(e error) bool {
+	err, ok := e.(*amqp.Error)
+	if !ok {
+		return false
+	}
+
+	channelErrCodes := []int{
 		amqp.ContentTooLarge,    // 311
 		amqp.NoConsumers,        // 313
 		amqp.AccessRefused,      // 403
 		amqp.NotFound,           // 404
 		amqp.ResourceLocked,     // 405
-		amqp.PreconditionFailed: // 406
-		return channelError
-
-	case
-		amqp.ConnectionForced, // 320
-		amqp.InvalidPath,      // 402
-		amqp.FrameError,       // 501
-		amqp.SyntaxError,      // 502
-		amqp.CommandInvalid,   // 503
-		amqp.ChannelError,     // 504
-		amqp.UnexpectedFrame,  // 505
-		amqp.ResourceError,    // 506
-		amqp.NotAllowed,       // 530
-		amqp.NotImplemented,   // 540
-		amqp.InternalError:    // 541
-		fallthrough
-
-	default:
-		return connectionError
+		amqp.PreconditionFailed, // 406
 	}
-}
 
-func isConnectionError(err error) bool {
-	if err, ok := err.(*amqp.Error); ok {
-		return errorType(err.Code) == connectionError
-	}
-	return false
+	return !slices.Contains(channelErrCodes, err.Code) || err.Recover || !err.Server
 }
