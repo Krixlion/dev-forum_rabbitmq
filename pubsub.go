@@ -37,7 +37,7 @@ func (mq *RabbitMQ) prepareExchange(ctx context.Context, route Route) error {
 		return err
 	}
 
-	ok, err := mq.breaker.Allow()
+	done, err := mq.breaker.Allow()
 	if err != nil {
 		setSpanErr(span, err)
 		return err
@@ -53,11 +53,11 @@ func (mq *RabbitMQ) prepareExchange(ctx context.Context, route Route) error {
 		nil,                // arguments
 	)
 	if err != nil {
-		ok(!isConnectionError(err))
+		done(!isConnectionError(err))
 		setSpanErr(span, err)
 		return err
 	}
-	ok(true)
+	done(true)
 
 	return nil
 }
@@ -74,7 +74,7 @@ func (mq *RabbitMQ) publish(ctx context.Context, msg Message) error {
 		return err
 	}
 
-	ok, err := mq.breaker.Allow()
+	done, err := mq.breaker.Allow()
 	if err != nil {
 		setSpanErr(span, err)
 		return err
@@ -93,11 +93,11 @@ func (mq *RabbitMQ) publish(ctx context.Context, msg Message) error {
 		},
 	)
 	if err != nil {
-		ok(!isConnectionError(err))
+		done(!isConnectionError(err))
 		setSpanErr(span, err)
 		return err
 	}
-	ok(true)
+	done(true)
 	return nil
 }
 
@@ -114,7 +114,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		return nil, err
 	}
 
-	ok, err := mq.breaker.Allow()
+	done, err := mq.breaker.Allow()
 	if err != nil {
 		setSpanErr(span, err)
 		return nil, err
@@ -130,11 +130,11 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		nil,             // args
 	)
 	if err != nil {
-		ok(!isConnectionError(err))
+		done(!isConnectionError(err))
 		setSpanErr(span, err)
 		return nil, err
 	}
-	ok(true)
+	done(true)
 
 	go func() {
 		for {
@@ -144,6 +144,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 				defer span.End()
 
 				if err := delivery.Ack(false); err != nil {
+					setSpanErr(span, err)
 					mq.opts.logger.Log(ctx, "Failed to acknowledge message delivery", "err", err)
 				}
 
@@ -173,17 +174,13 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 
 func (mq *RabbitMQ) prepareQueue(ctx context.Context, command string, route Route) (queue amqp.Queue, err error) {
 	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.prepareQueue")
-	defer func() {
-		if err != nil {
-			setSpanErr(span, err)
-		}
-		span.End()
-	}()
+	defer span.End()
 
 	ch := mq.askForChannel()
 
-	ok, err := mq.breaker.Allow()
+	done, err := mq.breaker.Allow()
 	if err != nil {
+		setSpanErr(span, err)
 		return amqp.Queue{}, err
 	}
 
@@ -196,22 +193,25 @@ func (mq *RabbitMQ) prepareQueue(ctx context.Context, command string, route Rout
 		nil,     // arguments
 	)
 	if err != nil {
-		ok(!isConnectionError(err))
+		setSpanErr(span, err)
+		done(!isConnectionError(err))
 		return amqp.Queue{}, err
 	}
-	ok(true)
+	done(true)
 
 	if err := ctx.Err(); err != nil {
+		setSpanErr(span, err)
 		return amqp.Queue{}, err
 	}
 
 	if err := mq.prepareExchange(ctx, route); err != nil {
-		ok(!isConnectionError(err))
+		setSpanErr(span, err)
 		return amqp.Queue{}, err
 	}
 
-	ok, err = mq.breaker.Allow()
+	done, err = mq.breaker.Allow()
 	if err != nil {
+		setSpanErr(span, err)
 		return amqp.Queue{}, err
 	}
 
@@ -223,10 +223,11 @@ func (mq *RabbitMQ) prepareQueue(ctx context.Context, command string, route Rout
 		nil,                // Additional args
 	)
 	if err != nil {
-		ok(!isConnectionError(err))
+		setSpanErr(span, err)
+		done(!isConnectionError(err))
 		return amqp.Queue{}, err
 	}
-	ok(true)
+	done(true)
 
 	return queue, nil
 }

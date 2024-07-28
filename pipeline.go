@@ -44,7 +44,7 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 					defer span.End()
 					defer func() { <-limiter }()
 
-					ok, err := mq.breaker.Allow()
+					done, err := mq.breaker.Allow()
 					if err != nil {
 						setSpanErr(span, err)
 						mq.tryToEnqueue(ctx, message, err, "Failed to publish msg")
@@ -65,11 +65,11 @@ func (mq *RabbitMQ) publishPipelined(ctx context.Context, messages <-chan Messag
 					)
 					if err != nil {
 						setSpanErr(span, err)
-						ok(!isConnectionError(err))
+						done(!isConnectionError(err))
 						mq.tryToEnqueue(ctx, message, err, "Failed to publish msg")
 						return
 					}
-					ok(true)
+					done(true)
 				}()
 
 			case <-ctx.Done():
@@ -97,9 +97,12 @@ func (mq *RabbitMQ) prepareExchangePipelined(ctx context.Context, msgs <-chan Me
 					defer span.End()
 					defer func() { <-limiter }()
 
-					ok, err := mq.breaker.Allow()
+					done, err := mq.breaker.Allow()
 					if err != nil {
+						done(!isConnectionError(err))
+						setSpanErr(span, err)
 						mq.tryToEnqueue(ctx, message, err, "Failed to prepare exchange before publishing")
+						return
 					}
 
 					err = channel.ExchangeDeclare(
@@ -112,12 +115,12 @@ func (mq *RabbitMQ) prepareExchangePipelined(ctx context.Context, msgs <-chan Me
 						nil,                  // arguments
 					)
 					if err != nil {
-						ok(!isConnectionError(err))
+						done(!isConnectionError(err))
 						setSpanErr(span, err)
 						mq.tryToEnqueue(ctx, message, err, "Failed to declare exchange")
 						return
 					}
-					ok(true)
+					done(true)
 
 					preparedMessages <- message
 				}()

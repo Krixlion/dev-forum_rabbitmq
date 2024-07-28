@@ -199,25 +199,21 @@ func (mq *RabbitMQ) reDial(ctx context.Context) {
 // dial renews current TCP connection.
 func (mq *RabbitMQ) dial(ctx context.Context) (err error) {
 	_, span := mq.opts.tracer.Start(ctx, "rabbitmq.dial")
-	defer func() {
-		if err != nil {
-			setSpanErr(span, err)
-		}
-		span.End()
-	}()
+	defer span.End()
 
-	ok, err := mq.breaker.Allow()
+	done, err := mq.breaker.Allow()
 	if err != nil {
+		setSpanErr(span, err)
 		return err
 	}
 
 	conn, err := amqp.Dial(mq.url)
 	if err != nil {
-		// If not conn error then broker is available.
-		ok(!isConnectionError(err))
+		setSpanErr(span, err)
+		done(!isConnectionError(err))
 		return err
 	}
-	ok(true)
+	done(true)
 
 	mq.connMutex.Lock()
 	mq.notifyConnClose = conn.NotifyClose(mq.notifyConnClose)
