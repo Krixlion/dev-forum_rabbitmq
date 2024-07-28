@@ -3,7 +3,7 @@ package rabbitmq_test
 import (
 	"context"
 	"encoding/json"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
@@ -66,7 +66,7 @@ func randomString(length int) string {
 	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	v := make([]rune, length)
 	for i := range v {
-		v[i] = letters[rand.Intn(len(letters))]
+		v[i] = letters[rand.IntN(len(letters))]
 	}
 	return string(v)
 }
