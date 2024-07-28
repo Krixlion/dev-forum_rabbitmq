@@ -4,6 +4,8 @@ import (
 	"context"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -156,6 +158,7 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 						ContentType: ContentType(delivery.ContentType),
 						Timestamp:   delivery.Timestamp,
 					}
+					otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(message.Headers))
 
 					// Non-blocking send to unbuffered channel
 					select {
