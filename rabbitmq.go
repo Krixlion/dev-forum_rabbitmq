@@ -23,7 +23,7 @@ type RabbitMQ struct {
 
 	notifyConnClose chan *amqp.Error        // Channel to watch for errors from the broker in order to renew the connection.
 	publishQueue    chan Message            // Queue for messages waiting to be republished.
-	readChannel     chan chan *amqp.Channel // Access channel for accessing the RabbitMQ Channel in a thread-safe way.
+	getChannel      chan chan *amqp.Channel // Access channel for accessing the RabbitMQ Channel in a thread-safe way.
 
 	opts options
 }
@@ -69,7 +69,7 @@ func NewRabbitMQ(consumer, user, pass, host, port string, config Config, opts ..
 		shutdown:     cancel,
 
 		publishQueue:    make(chan Message, config.QueueSize),
-		readChannel:     make(chan chan *amqp.Channel),
+		getChannel:      make(chan chan *amqp.Channel),
 		notifyConnClose: make(chan *amqp.Error, 16),
 
 		connMutex: sync.Mutex{},
@@ -101,7 +101,7 @@ func (mq *RabbitMQ) run(ctx context.Context) {
 
 	go mq.runPublishQueue(ctx)
 	go mq.handleConnectionErrors(ctx)
-	go mq.handleChannelReads(ctx)
+	go mq.handleChannelPropagation(ctx)
 }
 
 // Close closes active connection gracefully.
@@ -109,9 +109,7 @@ func (mq *RabbitMQ) Close() error {
 	mq.shutdown()
 
 	if mq.conn != nil && !mq.conn.IsClosed() {
-		if err := mq.conn.Close(); err != nil {
-			return err
-		}
+		return mq.conn.Close()
 	}
 
 	return nil
@@ -123,18 +121,18 @@ func (mq *RabbitMQ) runPublishQueue(ctx context.Context) {
 	mq.publishPipelined(ctx, preparedMessages)
 }
 
-// handleChannelReads is meant to be run in a separate goroutine.
-func (mq *RabbitMQ) handleChannelReads(ctx context.Context) {
+// handleChannelPropagation is meant to be run in a separate goroutine.
+func (mq *RabbitMQ) handleChannelPropagation(ctx context.Context) {
 	limiter := make(chan struct{}, mq.config.MaxWorkers)
 	for {
 		select {
-		case req := <-mq.readChannel:
+		case req := <-mq.getChannel:
 			limiter <- struct{}{}
 			go func() {
 				ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.handleChannelRead")
 				defer span.End()
 				defer func() { <-limiter }()
-				succedeed, err := mq.breaker.Allow()
+				done, err := mq.breaker.Allow()
 				if err != nil {
 					req <- nil
 					setSpanErr(span, err)
@@ -145,12 +143,12 @@ func (mq *RabbitMQ) handleChannelReads(ctx context.Context) {
 				if err != nil {
 					req <- nil
 					mq.opts.logger.Log(ctx, "Failed to open a new channel", "err", err)
-					succedeed(false)
+					done(false)
 					setSpanErr(span, err)
 					return
 				}
 
-				succedeed(true)
+				done(true)
 				req <- channel
 			}()
 		case <-ctx.Done():
@@ -191,8 +189,8 @@ func (mq *RabbitMQ) reDial(ctx context.Context) {
 		}
 
 		setSpanErr(span, err)
-
 		mq.opts.logger.Log(ctx, "Failed to connect to RabbitMQ", "err", err)
+
 		time.Sleep(mq.config.ReconnectInterval)
 		mq.opts.logger.Log(ctx, "Reconnecting to RabbitMQ")
 	}
@@ -233,7 +231,7 @@ func (mq *RabbitMQ) dial(ctx context.Context) (err error) {
 func (mq *RabbitMQ) askForChannel() *amqp.Channel {
 	for {
 		ask := make(chan *amqp.Channel)
-		mq.readChannel <- ask
+		mq.getChannel <- ask
 
 		channel := <-ask
 		if channel != nil {
