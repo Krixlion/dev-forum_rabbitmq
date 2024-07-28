@@ -102,7 +102,7 @@ func (mq *RabbitMQ) publish(ctx context.Context, msg Message) error {
 }
 
 func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<-chan Message, error) {
-	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.Consume", trace.WithSpanKind(trace.SpanKindConsumer))
+	ctx, span := mq.opts.tracer.Start(ctx, "rabbitmq.Consume init", trace.WithSpanKind(trace.SpanKindConsumer))
 	defer span.End()
 
 	messages := make(chan Message)
@@ -140,28 +140,30 @@ func (mq *RabbitMQ) Consume(ctx context.Context, command string, route Route) (<
 		for {
 			select {
 			case delivery := <-deliveries:
-				ctx, span := mq.opts.tracer.Start(ExtractAMQPHeaders(ctx, delivery.Headers), "rabbitmq.Consume send", trace.WithSpanKind(trace.SpanKindConsumer))
-				defer span.End()
+				func() {
+					ctx, span := mq.opts.tracer.Start(ExtractAMQPHeaders(ctx, delivery.Headers), "rabbitmq.Consume", trace.WithSpanKind(trace.SpanKindConsumer))
+					defer span.End()
 
-				if err := delivery.Ack(false); err != nil {
-					setSpanErr(span, err)
-					mq.opts.logger.Log(ctx, "Failed to acknowledge message delivery", "err", err)
-				}
+					if err := delivery.Ack(false); err != nil {
+						setSpanErr(span, err)
+						mq.opts.logger.Log(ctx, "Failed to acknowledge message delivery", "err", err)
+						return
+					}
 
-				message := Message{
-					Route:       route,
-					Body:        delivery.Body,
-					ContentType: ContentType(delivery.ContentType),
-					Timestamp:   delivery.Timestamp,
-				}
+					message := Message{
+						Route:       route,
+						Body:        delivery.Body,
+						ContentType: ContentType(delivery.ContentType),
+						Timestamp:   delivery.Timestamp,
+					}
 
-				// Non-blocking send to unbuffered channel
-				select {
-				case messages <- message:
-				default:
-					continue
-				}
-
+					// Non-blocking send to unbuffered channel
+					select {
+					case messages <- message:
+					default:
+						return
+					}
+				}()
 			case <-ctx.Done():
 				close(messages)
 				return
