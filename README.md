@@ -1,5 +1,5 @@
 # Status
-This library has been migrated to (dev_forum-lib)[https://github.com/krixlion/dev_forum-lib]. This repository is archived and no longer maintained.
+This library has been migrated to [dev_forum-lib](https://github.com/krixlion/dev_forum-lib). This repository is archived and no longer maintained.
 
 # dev-forum_rabbitmq
 [![GoDoc](https://godoc.org/github.com/krixlion/dev_forum-rabbitmq?status.svg)](https://godoc.org/github.com/krixlion/dev_forum-rabbitmq)
